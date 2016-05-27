@@ -1,6 +1,7 @@
 package email_cloud_app;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +18,9 @@ import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeBodyPart;
+
+import com.dropbox.core.DbxException;
+import com.dropbox.core.v2.files.UploadErrorException;
 
 public class EmailDownloadingHandler 
 {
@@ -60,14 +64,35 @@ public class EmailDownloadingHandler
 		catch (IOException e) 
 		{
 			e.printStackTrace();
+		} 
+		catch (UploadErrorException e) 
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		catch (DbxException e) 
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
-
-	private void saveMessage(Message msg) throws MessagingException, IOException 
+	
+	private void saveMessage(Message msg) throws MessagingException, IOException, UploadErrorException, DbxException 
 	{
 		String contentType = msg.getContentType();
 		if(contentType.contains("multipart"));
-		{
+			saveAttachment(msg);
+		Address[] in = msg.getFrom();
+		for (Address address : in) 
+			System.out.println("FROM:" + address.toString());
+		Multipart mp = (Multipart) msg.getContent();
+		BodyPart bp = mp.getBodyPart(0);
+		System.out.println("SENT DATE:" + msg.getSentDate());
+		System.out.println("SUBJECT:" + msg.getSubject());
+		System.out.println("CONTENT:" + bp.getContent());
+	}
+	private void saveAttachment(Message msg) throws MessagingException, IOException, FileNotFoundException, UploadErrorException, DbxException 
+	{
 			Multipart multiPart = (Multipart) msg.getContent();
 			for(int i = 0; i < multiPart.getCount(); i++)
 			{
@@ -75,10 +100,13 @@ public class EmailDownloadingHandler
 				if(Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()))
 				{
 					InputStream is = part.getInputStream();
-					File dir = new File("Attachment_" + part.getFileName() + "/");
+					File dir = new File("C:\\projektyJava\\pwr_lab06_Cloud\\bin");
 					dir.mkdir();
-					File f = new File(dir.toString()+ "/" + part.getFileName());
-				    FileOutputStream fos = new FileOutputStream(f);
+					
+					File file = new File(dir.toString()+ "/" + part.getFileName());
+					
+				   
+					FileOutputStream fos = new FileOutputStream(file);
 				    byte[] buf = new byte[4096];
 				    int bytesRead;
 				    while((bytesRead = is.read(buf))!=-1)
@@ -86,20 +114,13 @@ public class EmailDownloadingHandler
 				        fos.write(buf, 0, bytesRead);
 				    }
 				    fos.close();
+				  
+					this.cloudUploader.upload(file,"/"+part.getFileName());
 				}
 			}
 		}
-		Address[] in = msg.getFrom();
-		for (Address address : in) 
-		{
-			System.out.println("FROM:" + address.toString());
-		}
-		Multipart mp = (Multipart) msg.getContent();
-		BodyPart bp = mp.getBodyPart(0);
-		System.out.println("SENT DATE:" + msg.getSentDate());
-		System.out.println("SUBJECT:" + msg.getSubject());
-		System.out.println("CONTENT:" + bp.getContent());
-	}
+	
+	private CloudConnectionHandler cloudUploader = new CloudConnectionHandler();
 	private String hostName = "smtp.gmail.com";
 	private String userEmailAddress = "pwrjavatest@gmail.com";
 	private String password = "qwezxcasd";
