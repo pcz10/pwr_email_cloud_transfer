@@ -1,20 +1,22 @@
 package email_cloud_app;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Iterator;
+import java.io.InputStream;
 import java.util.Properties;
-import java.util.TreeSet;
 
 import javax.mail.Address;
+import javax.mail.BodyPart;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
+import javax.mail.Multipart;
 import javax.mail.NoSuchProviderException;
+import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
+import javax.mail.internet.MimeBodyPart;
 
 public class EmailDownloadingHandler 
 {
@@ -38,13 +40,11 @@ public class EmailDownloadingHandler
 			int messageCount = inbox.getMessageCount();
 			
 			System.out.println("Total messages: " + messageCount + "\n");
-						
-			Message[] messagesArray = inbox.getMessages();
-			for (int i = 0; i < messageCount; ++i) 
-			{
-				System.out.println("Mail Subjects: " + messagesArray[i].getSubject() + "\n");
+			
+			for(Message message : inbox.getMessages())
+			{	
+				saveMessage(message);
 			}
-						
 			inbox.close(false);
 			store.close();
 		} 
@@ -56,117 +56,51 @@ public class EmailDownloadingHandler
 		{
 			System.err.println("messaging exception");
 			e.printStackTrace();
+		} 
+		catch (IOException e) 
+		{
+			e.printStackTrace();
 		}
-
 	}
 
-
-
-	private Store store;
+	private void saveMessage(Message msg) throws MessagingException, IOException 
+	{
+		String contentType = msg.getContentType();
+		if(contentType.contains("multipart"));
+		{
+			Multipart multiPart = (Multipart) msg.getContent();
+			for(int i = 0; i < multiPart.getCount(); i++)
+			{
+				MimeBodyPart part = (MimeBodyPart) multiPart.getBodyPart(i);
+				if(Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()))
+				{
+					InputStream is = part.getInputStream();
+					File dir = new File("Attachment_" + part.getFileName() + "/");
+					dir.mkdir();
+					File f = new File(dir.toString()+ "/" + part.getFileName());
+				    FileOutputStream fos = new FileOutputStream(f);
+				    byte[] buf = new byte[4096];
+				    int bytesRead;
+				    while((bytesRead = is.read(buf))!=-1)
+				    {
+				        fos.write(buf, 0, bytesRead);
+				    }
+				    fos.close();
+				}
+			}
+		}
+		Address[] in = msg.getFrom();
+		for (Address address : in) 
+		{
+			System.out.println("FROM:" + address.toString());
+		}
+		Multipart mp = (Multipart) msg.getContent();
+		BodyPart bp = mp.getBodyPart(0);
+		System.out.println("SENT DATE:" + msg.getSentDate());
+		System.out.println("SUBJECT:" + msg.getSubject());
+		System.out.println("CONTENT:" + bp.getContent());
+	}
 	private String hostName = "smtp.gmail.com";
 	private String userEmailAddress = "pwrjavatest@gmail.com";
 	private String password = "qwezxcasd";
-
 }
-	
-	
-/*	
-	public static void doit() throws MessagingException, IOException {
-		Folder folder = null;
-		Store store = null;
-		try {
-			Properties props = System.getProperties();
-			props.setProperty("mail.store.protocol", "imaps");
-
-			Session session = Session.getDefaultInstance(props, null);
-			// session.setDebug(true);
-			store = session.getStore("imaps");
-			store.connect("imap.gmail.com", "myemail@gmail.com", "******");
-			folder = store.getFolder("Inbox");
-		
-	
-			folder.open(Folder.READ_WRITE);
-			Message messages[] = folder.getMessages();
-			System.out.println("No of Messages : " + folder.getMessageCount());
-			System.out.println("No of Unread Messages : " + folder.getUnreadMessageCount());
-			for (int i = 0; i < messages.length; ++i) {
-				System.out.println("MESSAGE #" + (i + 1) + ":");
-				Message msg = messages[i];
-				
-				String from = "unknown";
-				if (msg.getReplyTo().length >= 1) {
-					from = msg.getReplyTo()[0].toString();
-				} else if (msg.getFrom().length >= 1) {
-					from = msg.getFrom()[0].toString();
-				}
-				String subject = msg.getSubject();
-				System.out.println("Saving ... " + subject + " " + from);
-				// you may want to replace the spaces with "_"
-				// the TEMP directory is used to store the files
-				String filename = "c:/temp/" + subject;
-				saveParts(msg.getContent(), filename);
-				msg.setFlag(Flags.Flag.SEEN, true);
-				// to delete the message
-				// msg.setFlag(Flags.Flag.DELETED, true);
-			}
-		} finally {
-			if (folder != null) {
-				folder.close(true);
-			}
-			if (store != null) {
-				store.close();
-			}
-		}
-	}
-
-	public static void saveParts(Object content, String filename) throws IOException, MessagingException {
-		OutputStream out = null;
-		InputStream in = null;
-		try {
-			if (content instanceof Multipart) {
-				Multipart multi = ((Multipart) content);
-				int parts = multi.getCount();
-				for (int j = 0; j < parts; ++j) {
-					MimeBodyPart part = (MimeBodyPart) multi.getBodyPart(j);
-					if (part.getContent() instanceof Multipart) {
-						// part-within-a-part, do some recursion...
-						saveParts(part.getContent(), filename);
-					} else {
-						String extension = "";
-						if (part.isMimeType("text/html")) {
-							extension = "html";
-						} else {
-							if (part.isMimeType("text/plain")) {
-								extension = "txt";
-							} else {
-								// Try to get the name of the attachment
-								extension = part.getDataHandler().getName();
-							}
-							filename = filename + "." + extension;
-							System.out.println("... " + filename);
-							out = new FileOutputStream(new File(filename));
-							in = part.getInputStream();
-							int k;
-							while ((k = in.read()) != -1) {
-								out.write(k);
-							}
-						}
-					}
-				}
-			}
-		} finally {
-			if (in != null) {
-				in.close();
-			}
-			if (out != null) {
-				out.flush();
-				out.close();
-			}
-		}
-	}
-
-	public static void main(String args[]) throws Exception {
-		ReceiveMailImap.doit();
-	}
-}
-*/
