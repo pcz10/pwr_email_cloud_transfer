@@ -53,29 +53,9 @@ public class EmailDownloadingHandler
 			inbox.close(false);
 			store.close();
 		} 
-		catch (NoSuchProviderException e) 
-		{
-			System.err.println("invalid provider name");
-		} 
-		catch (MessagingException e) 
-		{
-			System.err.println("messaging exception");
-			e.printStackTrace();
-		} 
-		catch (IOException e) 
-		{
-			e.printStackTrace();
-		} 
-		catch (UploadErrorException e) 
-		{
-			e.printStackTrace();
-		}
-		catch (DbxException e) 
-		{
-			e.printStackTrace();
-		}
-	}
+		finally{}
 	
+}
 	private void saveMessage(Message msg) throws Exception 
 	{
 
@@ -90,75 +70,38 @@ public class EmailDownloadingHandler
 		String subject = msg.getSubject();
 		String sentDate = msg.getSentDate().toString();
 		String messageContent = "";
-		String attachFiles = "";
-		
-		//log(getTextFromMessage(msg));
 		
 		Object content = msg.getContent();
-
 		if(content instanceof Multipart)
 		{
 			MimeMultipart mp = (MimeMultipart)msg.getContent();
 			int count = mp.getCount();
 			for(int i = 0; i < count; ++i)
 			{
-				MimeBodyPart mbp = (MimeBodyPart) mp.getBodyPart(i);
-				log(mbp.getContentType()+" ssss ");
+				BodyPart mbp =  mp.getBodyPart(i);
+				
 				if(mbp.getContentType().contains("ALTERNATIVE"))
 				{
-					DataHandler dh = mbp.getDataHandler();
-					dh.writeTo(System.out);
-					messageContent = mbp.getContent().toString();
+					MimeMultipart m = (MimeMultipart) mbp.getContent();
+					for(int h = 0; h < m.getCount(); ++h)
+					{
+						MimeBodyPart bp = (MimeBodyPart) m.getBodyPart(h);
+						if(bp.getContentType().contains("TEXT/PLAIN"))
+						{
+							messageContent = bp.getContent().toString();
+						}
+					}					
 				}
-					//(mbp.isMimeType("te") ){
-					
-					//mbp.writeTo(System.out);
-				}// else 
-                 //{
-				//	 if(mbp.isMimeType("text/html"))
-				//		 mbp.writeTo(System.out);
-                 //}
+
+	         System.out.println("\t From: " + fromWho);
+	         System.out.println("\t Subject: " + subject);
+	         System.out.println("\t Sent Date: " + sentDate);
+	         System.out.println("\t Message: " + messageContent);
 			}
-
-
-
-         // print out details of each message
-         System.out.println("\t From: " + fromWho);
-         System.out.println("\t Subject: " + subject);
-         System.out.println("\t Sent Date: " + sentDate);
-         System.out.println("\t Message: " + messageContent);
-         System.out.println("\t Attachments: " + attachFiles);
+		}
  
 }
-	private String getTextFromMessage(Message message) throws Exception {
-		if (message.isMimeType("text/plain")) {
-			return message.getContent().toString();
-		} else if (message.isMimeType("multipart/*")) {
-			String result = "";
-			MimeMultipart mimeMultipart = (MimeMultipart) message.getContent();
-			int count = mimeMultipart.getCount();
-			for (int i = 0; i < count; i++) {
-				BodyPart bodyPart = mimeMultipart.getBodyPart(i);
-				if (bodyPart.isMimeType("text/plain")) {
-					result = result + "\n" + bodyPart.getContent();
-					break; // without break same text appears twice in my tests
-				} //else if (bodyPart.isMimeType("text/html")) {
-					//String html = (String) bodyPart.getContent();
-					//result = result + "\n" + Jsoup.parse(html).text();
-
-				//}
-			}
-			return result;
-		}
-		return "";
-	}
-	//	if (disposition == null) 
-		//{ 
-       //     if ((contentType.length() >= 10) && (contentType.toLowerCase().substring(0, 10).equals("text/plain")))
-      //          saveFile(part.getFileName() + "1.txt", part);
-      //      else 
-      //      	saveFile(part.getFileName() + "1.txt", part);
-     //   } 
+	
 		
 	public static void log(String message)
 	{
@@ -190,25 +133,25 @@ public class EmailDownloadingHandler
 				MimeBodyPart part = (MimeBodyPart) multiPart.getBodyPart(i);
 				if(Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()))
 				{
-					File file = saveAttachmentFile(part);
+					//File file = saveAttachmentFile(part);
 				  
-					this.cloudUploader.upload(file,"/"+part.getFileName());
+				//	this.cloudUploader.upload(file,"/"+part.getFileName());
 				}
 			}
 		}
 
-	private File saveAttachmentFile(MimeBodyPart part) throws IOException, MessagingException, FileNotFoundException {
-		InputStream is = part.getInputStream();
+	private File save(InputStream inputStream,String folderName) throws IOException, MessagingException, FileNotFoundException {
+
 		File dir = new File("C:\\projektyJava\\pwr_lab06_Cloud\\bin");
 		dir.mkdir();
 		
-		File file = new File(dir.toString()+ "/" + part.getFileName());
+		File file = new File(dir.toString()+ "/" + folderName);
 		
    
 		FileOutputStream fos = new FileOutputStream(file);
 		byte[] buf = new byte[4096];
 		int bytesRead;
-		while((bytesRead = is.read(buf))!=-1)
+		while((bytesRead = inputStream.read(buf))!=-1)
 		{
 		    fos.write(buf, 0, bytesRead);
 		}
