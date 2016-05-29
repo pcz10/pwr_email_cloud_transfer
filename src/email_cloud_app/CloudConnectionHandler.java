@@ -23,15 +23,15 @@ public class CloudConnectionHandler
 	   	DbxClientV2 client = new DbxClientV2(config, ACCESS_TOKEN);
 	   	this.client = client;
 	}
-	public void upload(File file,String name) throws UploadErrorException, DbxException, FileNotFoundException, IOException
+	public void upload(File file,String path) throws UploadErrorException, DbxException, FileNotFoundException, IOException
 	{
 		InputStream inputStream = new FileInputStream(file);
 		try
 		{
-			FileMetadata uploadedFile = this.client.files().uploadBuilder(name).uploadAndFinish(inputStream);
+			FileMetadata uploadedFile = this.client.files().uploadBuilder(path).uploadAndFinish(inputStream);
 		}
 	   	finally{}
 	}
-	private DbxClientV2 client;
+	public DbxClientV2 client;
 	private static final String ACCESS_TOKEN = "vX9cF0nPkBAAAAAAAAAAJO3A-9oKrfkw7AZ0szsfWYmKezzvfU4hLDvvxFdC4hOC";
 }

@@ -21,6 +21,9 @@ import javax.mail.Store;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
 
+import com.dropbox.core.DbxException;
+import com.dropbox.core.v2.files.UploadErrorException;
+
 public class EmailTransferHandler 
 {
 	public static void main(String[] args) throws Exception
@@ -59,6 +62,8 @@ public class EmailTransferHandler
 		String messageContent = "";
 		Object content = msg.getContent();
 		File contentDirectory = new File(saveDirectory+folderNumerator);
+		cloudUploader.client.files().createFolder("/email"+folderNumerator);
+		
 		if(content instanceof Multipart)
 		{
 			MimeMultipart mp = (MimeMultipart)msg.getContent();
@@ -85,11 +90,10 @@ public class EmailTransferHandler
 		}
 		String fullMessageContent = fromWho + subject + sentDate + messageContent;
 		saveMessage(fullMessageContent, contentDirectory);
-		//this.cloudUploader.upload(contentDirectory, "/email" + folderNumerator);
 		++folderNumerator;
 	}
 	
-	private void saveMessage(String messageContent,File contentDirectory) throws IOException, MessagingException
+	private void saveMessage(String messageContent,File contentDirectory) throws IOException, MessagingException, UploadErrorException, DbxException
 	{
 		contentDirectory.mkdir();
 		File file = new File(contentDirectory.toString() + "/message" + folderNumerator + ".txt");
@@ -108,9 +112,10 @@ public class EmailTransferHandler
 		{
 			e.printStackTrace();
 		}
+		this.cloudUploader.upload(file, "/email" + folderNumerator + "/message.pdf");
 	}
 
-	private void saveAttachment(Part part, File contentDirectory) throws IOException, MessagingException, FileNotFoundException 
+	private void saveAttachment(Part part, File contentDirectory) throws IOException, MessagingException, FileNotFoundException, UploadErrorException, DbxException 
 	{
 		InputStream is = part.getInputStream();
 		contentDirectory.mkdir();
@@ -123,6 +128,7 @@ public class EmailTransferHandler
 		    fos.write(buf, 0, bytesRead);
 		}
 		fos.close();
+		this.cloudUploader.upload(file, "/email" + folderNumerator + "/" + part.getFileName());
 	}
 	private Converter converter = new Converter();
 	private static int folderNumerator = 1;
