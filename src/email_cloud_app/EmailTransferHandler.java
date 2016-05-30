@@ -15,6 +15,7 @@ import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
+import javax.mail.NoSuchProviderException;
 import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
@@ -33,37 +34,39 @@ public class EmailTransferHandler
 	
 	public EmailTransferHandler() throws Exception 
 	{
+		Store store = establishConnectionWithEmail();
+		Folder inbox = getInbox(store);
 		try 
 		{	
-			Session session = Session.getInstance(new Properties(), null);
-			Store store = session.getStore("imaps");
-			store.connect(this.hostName, this.userEmailAddress, this.password);
-			Folder inbox = store.getFolder("inbox");
-			inbox.open(Folder.READ_ONLY);
 			for(Message message : inbox.getMessages())
 				processMessage(message);
+		} 
+		finally
+		{
 			inbox.close(false);
 			store.close();
-		} 
-		finally{}
+		}
+	}
+
+	private Folder getInbox(Store store) throws MessagingException {
+		Folder inbox = store.getFolder("inbox");
+		inbox.open(Folder.READ_ONLY);
+		return inbox;
+	}
+
+	private Store establishConnectionWithEmail() throws NoSuchProviderException, MessagingException {
+		Session session = Session.getInstance(new Properties(), null);
+		Store store = session.getStore("imaps");
+		store.connect(this.hostName, this.userEmailAddress, this.password);
+		return store;
 	}
 	
-	private void processMessage(Message msg) throws Exception 
+	private void processMessage(Message msg) throws Exception
 	{
-		handleBodyPart(msg);
-	}
-	
-	private void handleBodyPart(Message msg) throws Exception
-	{
-		Address[] address = msg.getFrom();
-		String fromWho = "From: " + address[0].toString() + System.getProperty("line.separator");
-		String subject = "Subject: " + msg.getSubject() + System.getProperty("line.separator");
-		String sentDate = "Sent date: " + msg.getSentDate().toString() + System.getProperty("line.separator") + "Message: ";
-		String messageContent = "";
 		Object content = msg.getContent();
-		File contentDirectory = new File(saveDirectory+folderNumerator);
-		cloudUploader.client.files().createFolder("/email"+folderNumerator);
-		
+		File contentDirectory = new File(saveDirectory + folderNumerator);
+		cloudUploader.client.files().createFolder("/email" + folderNumerator);
+		String messageContent = "";
 		if(content instanceof Multipart)
 		{
 			MimeMultipart mp = (MimeMultipart)msg.getContent();
@@ -73,46 +76,61 @@ public class EmailTransferHandler
 				BodyPart mbp =  mp.getBodyPart(i);
 				if(Part.ATTACHMENT.equalsIgnoreCase(mbp.getDisposition()))
 					saveAttachment(mbp, contentDirectory); 
-				
 				if(mbp.getContentType().contains("ALTERNATIVE"))
-				{
-					MimeMultipart m = (MimeMultipart) mbp.getContent();
-					for(int h = 0; h < m.getCount(); ++h)
-					{
-						MimeBodyPart bp = (MimeBodyPart) m.getBodyPart(h);
-						if(bp.getContentType().contains("TEXT/PLAIN"))
-							messageContent = bp.getContent().toString();
-					}					
-				}
+					messageContent = processTextInMessageWithAttachment(messageContent, mbp);	
 				else if(mbp.getContentType().contains("TEXT/PLAIN"))
-					messageContent = mbp.getContent().toString();
+					messageContent = processTextInMessageWithoutAttachment(mbp);
 			}
 		}
-		String fullMessageContent = fromWho + subject + sentDate + messageContent;
+		String fullMessageContent = generateMessageContent(msg, messageContent);
 		saveMessage(fullMessageContent, contentDirectory);
 		++folderNumerator;
 	}
+
+	private String processTextInMessageWithoutAttachment(BodyPart mbp) throws IOException, MessagingException {
+		String messageContent;
+		messageContent = mbp.getContent().toString();
+		return messageContent;
+	}
+
+	private String generateMessageContent(Message msg, String messageContent) throws MessagingException
+	{
+		Address[] address = msg.getFrom();
+		String fromWho = "From: " + address[0].toString() + System.getProperty("line.separator");
+		String subject = "Subject: " + msg.getSubject() + System.getProperty("line.separator");
+		String sentDate = "Sent date: " + msg.getSentDate().toString() + System.getProperty("line.separator") + "Message: ";
+		messageContent = "";
+		String fullMessageContent = fromWho + subject + sentDate + messageContent;
+		return fullMessageContent;
+	}
 	
-	private void saveMessage(String messageContent,File contentDirectory) throws IOException, MessagingException, UploadErrorException, DbxException
+	private String processTextInMessageWithAttachment(String messageContent, BodyPart mbp) throws IOException, MessagingException 
+	{
+		MimeMultipart m = (MimeMultipart) mbp.getContent();
+		for(int h = 0; h < m.getCount(); ++h)
+		{
+			MimeBodyPart bp = (MimeBodyPart) m.getBodyPart(h);
+			if(bp.getContentType().contains("TEXT/PLAIN"))
+				messageContent = bp.getContent().toString();
+		}
+		return messageContent;
+	}
+	
+	private void saveMessage(String messageContent,File contentDirectory) throws Exception
 	{
 		contentDirectory.mkdir();
 		File file = new File(contentDirectory.toString() + "/message" + folderNumerator + ".txt");
-		try
-		{
+		try(
 			BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+			)
+		{
 			writer.write(messageContent);
 			writer.flush();
 			writer.close();
 			converter.convertTextToPDF(file);
-		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
-		} catch (Exception e) 
-		{
-			e.printStackTrace();
-		}
-		this.cloudUploader.upload(file, "/email" + folderNumerator + "/message.pdf");
+		} 
+		int numberOfFilesToUpload = 2;
+		uploadMessage(file,numberOfFilesToUpload);
 	}
 
 	private void saveAttachment(Part part, File contentDirectory) throws IOException, MessagingException, FileNotFoundException, UploadErrorException, DbxException 
@@ -121,15 +139,27 @@ public class EmailTransferHandler
 		contentDirectory.mkdir();
 		File file = new File(contentDirectory.toString()+ "/" + part.getFileName());
 		FileOutputStream fos = new FileOutputStream(file);
+		
 		byte[] buf = new byte[4096];
 		int bytesRead;
 		while((bytesRead = is.read(buf))!=-1)
-		{
 		    fos.write(buf, 0, bytesRead);
-		}
 		fos.close();
+		
+		uploadAttachment(file,part);
+	}
+
+	private void uploadMessage(File file,int numberOfFilesToUpload) throws UploadErrorException, DbxException, FileNotFoundException, IOException
+	{
+		this.cloudUploader.upload(file, "/email" + folderNumerator + "/message.pdf");
+		this.cloudUploader.upload(file, "/email" + folderNumerator + "/message" + folderNumerator + ".txt");
+	}
+	
+	private void uploadAttachment(File file, Part part) throws UploadErrorException, DbxException, FileNotFoundException, IOException, MessagingException
+	{
 		this.cloudUploader.upload(file, "/email" + folderNumerator + "/" + part.getFileName());
 	}
+
 	private Converter converter = new Converter();
 	private static int folderNumerator = 1;
 	private String saveDirectory = "C:\\projektyJava\\pwr_lab06_Cloud\\bin\\email";

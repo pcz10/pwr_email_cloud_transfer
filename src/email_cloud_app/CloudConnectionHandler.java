@@ -6,13 +6,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
-
 import com.dropbox.core.DbxException;
 import com.dropbox.core.DbxRequestConfig;
-import com.dropbox.core.v1.DbxEntry;
 import com.dropbox.core.v2.DbxClientV2;
-import com.dropbox.core.v2.files.FileMetadata;
-import com.dropbox.core.v2.files.UploadBuilder;
 import com.dropbox.core.v2.files.UploadErrorException;
 
 public class CloudConnectionHandler 
@@ -28,7 +24,7 @@ public class CloudConnectionHandler
 		InputStream inputStream = new FileInputStream(file);
 		try
 		{
-			FileMetadata uploadedFile = this.client.files().uploadBuilder(path).uploadAndFinish(inputStream);
+			this.client.files().uploadBuilder(path).uploadAndFinish(inputStream);
 		}
 	   	finally{}
 	}
